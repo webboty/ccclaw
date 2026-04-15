@@ -1,0 +1,20 @@
+name: OpenAI Agent
+description: A specialist agent powered by OpenAI GPT-4o via OpenCode harness
+
+# The env var name in .env that holds this agent's Telegram bot token.
+telegram_bot_token_env: OPENAI_AGENT_BOT_TOKEN
+
+# Agent harness: opencode allows using any model from 75+ providers
+harness: opencode
+
+# Provider and model configuration
+provider: openai
+model: gpt-4o
+
+# Obsidian integration (optional).
+# Assign folders from your vault so this agent auto-loads relevant context.
+# obsidian:
+#   vault: /path/to/your/obsidian/vault
+#   folders:
+#     - FolderA/
+#     - FolderB/

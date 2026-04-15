@@ -2,12 +2,13 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-import { runAgent, UsageInfo } from './agent.js';
-import { loadAgentConfig, listAgentIds, resolveAgentClaudeMd } from './agent-config.js';
+import { loadAgentConfig, listAgentIds, resolveAgentClaudeMd, type HarnessType } from './agent-config.js';
 import { PROJECT_ROOT } from './config.js';
 import { logToHiveMind, createInterAgentTask, completeInterAgentTask } from './db.js';
 import { logger } from './logger.js';
 import { buildMemoryContext } from './memory.js';
+import { createHarness, type AgentHarness } from './harnesses/index.js';
+import type { UsageInfo } from './agent.js';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -187,16 +188,20 @@ export async function delegateToAgent(
     const timer = setTimeout(() => abortCtrl.abort(), timeoutMs);
 
     try {
-      const result = await runAgent(
-        fullPrompt,
-        undefined, // fresh session for each delegation
-        () => {}, // no typing indicator needed for sub-delegation
-        undefined, // no progress callback for inner agent
-        undefined, // use default model
-        abortCtrl,
-        undefined, // no streaming for delegation
-        agentConfig.mcpServers,
-      );
+      const harnessType: HarnessType = agentConfig.harness ?? 'claude-code';
+      const harness = await createHarness(harnessType);
+      const cwd = path.join(PROJECT_ROOT, 'agents', agentId);
+
+      const result = await harness.run({
+        message: fullPrompt,
+        sessionId: undefined,
+        cwd,
+        model: agentConfig.provider ? `${agentConfig.provider}/${agentConfig.model}` : agentConfig.model,
+        systemPrompt,
+        mcpAllowlist: agentConfig.mcpServers,
+        abortController: abortCtrl,
+        onTyping: () => {},
+      });
 
       clearTimeout(timer);
 

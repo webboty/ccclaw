@@ -299,11 +299,10 @@ export function getDashboardHtml(token: string, chatId: string): string {
 
       <div class="flex gap-2 mb-3">
         <div style="flex:1">
-          <label class="text-xs text-gray-400 block mb-1">Model</label>
-          <select id="caw-model" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#e0e0e0;font-size:12px;outline:none">
-            <option value="claude-sonnet-4-6" selected>Sonnet 4.6</option>
-            <option value="claude-opus-4-6">Opus 4.6</option>
-            <option value="claude-haiku-4-5">Haiku 4.5</option>
+          <label class="text-xs text-gray-400 block mb-1">Harness</label>
+          <select id="caw-harness" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#e0e0e0;font-size:12px;outline:none" onchange="cawHarnessChanged()">
+            <option value="claude-code" selected>Claude Code</option>
+            <option value="opencode">OpenCode (multi-provider)</option>
           </select>
         </div>
         <div style="flex:1">
@@ -311,6 +310,30 @@ export function getDashboardHtml(token: string, chatId: string): string {
           <select id="caw-template" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#e0e0e0;font-size:12px;outline:none">
             <option value="_template">Blank</option>
           </select>
+        </div>
+      </div>
+
+      <div id="caw-model-section">
+        <div class="flex gap-2 mb-3">
+          <div id="caw-model-select-wrapper" style="flex:1">
+            <label class="text-xs text-gray-400 block mb-1">Model</label>
+            <select id="caw-model" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#e0e0e0;font-size:12px;outline:none">
+              <option value="claude-sonnet-4-6" selected>Sonnet 4.6</option>
+              <option value="claude-opus-4-6">Opus 4.6</option>
+              <option value="claude-haiku-4-5">Haiku 4.5</option>
+            </select>
+          </div>
+          <div id="caw-provider-select-wrapper" style="flex:1;display:none">
+            <label class="text-xs text-gray-400 block mb-1">Provider</label>
+            <select id="caw-provider" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#e0e0e0;font-size:12px;outline:none">
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="google">Google Gemini</option>
+              <option value="groq">Groq (free)</option>
+              <option value="ollama">Ollama (local)</option>
+              <option value="models.dev">Models.dev (75+)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -970,18 +993,23 @@ async function loadAgents() {
       const color = AGENT_COLORS[a.id] || '#6b7280';
       const dot = a.running ? '<span style="color:#6ee7b7">\u25CF</span>' : '<span style="color:#666">\u25CB</span>';
       const statusText = a.running ? 'live' : 'off';
+      const harness = a.harness || 'claude-code';
+      const harnessBadge = harness === 'opencode'
+        ? '<span style="display:inline-block;background:#7c3aed;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:600;margin-left:4px">OC</span>'
+        : '<span style="display:inline-block;background:#1e3a5f;color:#60a5fa;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:600;margin-left:4px">CC</span>';
+      const providerLabel = a.provider ? a.provider.toUpperCase() : '';
       const modelOpts = ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-sonnet-4-5', 'claude-haiku-4-5'];
       const modelShort = function(m) { return {'claude-opus-4-6':'Opus','claude-sonnet-4-6':'Sonnet','claude-sonnet-4-5':'Sonnet 4.5','claude-haiku-4-5':'Haiku'}[m] || m; };
       const currentModel = a.model || (a.id === 'main' ? 'claude-opus-4-6' : 'claude-sonnet-4-6');
       const modelLabel = modelShort(currentModel);
       const modelSelect = '<div class="model-picker" data-agent="' + a.id + '" onclick="event.stopPropagation();toggleModelPicker(this)">' +
-        '<span class="model-current">' + modelLabel + ' <span style="font-size:8px;opacity:0.5">&#9662;</span></span>' +
+        '<span class="model-current">' + modelLabel + (providerLabel ? ' ' + providerLabel : '') + ' <span style="font-size:8px;opacity:0.5">&#9662;</span></span>' +
         '<div class="model-menu" style="display:none">' +
           modelOpts.map(m => '<div class="model-opt' + (currentModel === m ? ' model-active' : '') + '" data-model="' + m + '" onclick="pickModel(this)">' + modelShort(m) + '</div>').join('') +
         '</div>' +
       '</div>';
       return '<div class="card clickable-card" style="min-width:130px;flex:1;max-width:220px;border-left:3px solid ' + color + '" data-agent="' + a.id + '" onclick="toggleAgentDetail(this.dataset.agent)">' +
-        '<div class="font-bold text-white text-sm">' + a.name + '</div>' +
+        '<div class="font-bold text-white text-sm">' + a.name + harnessBadge + '</div>' +
         '<div class="text-xs mt-1">' + dot + ' ' + statusText + '</div>' +
         modelSelect +
         (a.running ? '<div class="text-xs text-gray-400 mt-1">' + a.todayTurns + ' turns</div>' : '') +
@@ -1274,6 +1302,68 @@ function cawIdChanged() {
 
 function cawGoStep1() { cawShowStep(1); }
 
+function cawHarnessChanged() {
+  var harness = document.getElementById('caw-harness').value;
+  var modelSelectWrapper = document.getElementById('caw-model-select-wrapper');
+  var providerSelectWrapper = document.getElementById('caw-provider-select-wrapper');
+  var modelSelect = document.getElementById('caw-model');
+
+  if (harness === 'opencode') {
+    modelSelectWrapper.style.display = 'none';
+    providerSelectWrapper.style.display = '';
+    // Set default OpenCode model based on provider
+    updateOpenCodeModelOptions();
+  } else {
+    modelSelectWrapper.style.display = '';
+    providerSelectWrapper.style.display = 'none';
+    // Reset to Claude models
+    modelSelect.innerHTML = '<option value="claude-sonnet-4-6" selected>Sonnet 4.6</option>' +
+      '<option value="claude-opus-4-6">Opus 4.6</option>' +
+      '<option value="claude-haiku-4-5">Haiku 4.5</option>';
+  }
+}
+
+function updateOpenCodeModelOptions() {
+  var provider = document.getElementById('caw-provider').value;
+  var modelSelect = document.getElementById('caw-model');
+  var models = {
+    'openai': [
+      { value: 'gpt-4o', label: 'GPT-4o' },
+      { value: 'gpt-4o-mini', label: 'GPT-4o mini' },
+      { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+    ],
+    'anthropic': [
+      { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
+      { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
+      { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
+    ],
+    'google': [
+      { value: 'gemini-2-5-flash', label: 'Gemini 2.5 Flash' },
+      { value: 'gemini-2-5-pro', label: 'Gemini 2.5 Pro' },
+      { value: 'gemini-1-5-pro', label: 'Gemini 1.5 Pro' },
+    ],
+    'groq': [
+      { value: 'llama-3-3-70b-versatile', label: 'Llama 3.3 70B' },
+      { value: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
+      { value: 'gemma2-9b-it', label: 'Gemma 2 9B' },
+    ],
+    'ollama': [
+      { value: 'llama3.2', label: 'Llama 3.2' },
+      { value: 'llama3.1', label: 'Llama 3.1' },
+      { value: 'codellama', label: 'Code Llama' },
+    ],
+    'models.dev': [
+      { value: 'anthropic/claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
+      { value: 'openai/gpt-4o', label: 'GPT-4o' },
+      { value: 'google/gemini-2-5-flash', label: 'Gemini 2.5 Flash' },
+    ],
+  };
+  var options = models[provider] || models['openai'];
+  modelSelect.innerHTML = options.map(function(m) {
+    return '<option value="' + m.value + '">' + m.label + '</option>';
+  }).join('');
+}
+
 function cawGoStep2() {
   var id = document.getElementById('caw-id').value.trim();
   var name = document.getElementById('caw-name').value.trim();
@@ -1361,6 +1451,14 @@ async function cawCreate() {
   btn.style.pointerEvents = 'none';
   errEl.style.display = 'none';
 
+  var harness = document.getElementById('caw-harness').value;
+  var model = harness === 'opencode'
+    ? document.getElementById('caw-model').value
+    : document.getElementById('caw-model').value;
+  var provider = harness === 'opencode'
+    ? document.getElementById('caw-provider').value
+    : undefined;
+
   try {
     var res = await fetch(BASE + '/api/agents/create?token=' + TOKEN, {
       method: 'POST',
@@ -1369,7 +1467,9 @@ async function cawCreate() {
         id: document.getElementById('caw-id').value.trim(),
         name: document.getElementById('caw-name').value.trim(),
         description: document.getElementById('caw-desc').value.trim(),
-        model: document.getElementById('caw-model').value,
+        model: model,
+        harness: harness,
+        provider: provider,
         template: document.getElementById('caw-template').value,
         botToken: document.getElementById('caw-token').value.trim(),
       }),

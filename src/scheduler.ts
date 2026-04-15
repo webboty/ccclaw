@@ -1,6 +1,6 @@
 import { CronExpressionParser } from 'cron-parser';
 
-import { AGENT_ID, ALLOWED_CHAT_ID, agentMcpAllowlist } from './config.js';
+import { AGENT_ID, ALLOWED_CHAT_ID, agentMcpAllowlist, agentDefaultModel, agentHarness, agentProvider, PROJECT_ROOT } from './config.js';
 import {
   getDueTasks,
   getSession,
@@ -15,6 +15,7 @@ import {
 import { logger } from './logger.js';
 import { messageQueue } from './message-queue.js';
 import { runAgent } from './agent.js';
+import { createHarness } from './harnesses/index.js';
 import { formatForTelegram, splitMessage } from './bot.js';
 import { emitChatEvent } from './state.js';
 
@@ -22,6 +23,27 @@ type Sender = (text: string) => Promise<void>;
 
 /** Max time (ms) a scheduled task can run before being killed. */
 const TASK_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+
+async function runScheduledTask(prompt: string, abortController: AbortController) {
+  const effectiveModel = agentProvider && agentDefaultModel
+    ? `${agentProvider}/${agentDefaultModel}`
+    : agentDefaultModel;
+
+  if (agentHarness === 'opencode') {
+    const harness = createHarness('opencode');
+    return harness.run({
+      message: prompt,
+      sessionId: undefined,
+      cwd: PROJECT_ROOT,
+      model: effectiveModel,
+      mcpAllowlist: agentMcpAllowlist,
+      abortController,
+      onTyping: () => {},
+    });
+  }
+
+  return runAgent(prompt, undefined, () => {}, undefined, undefined, abortController, undefined, agentMcpAllowlist);
+}
 
 let sender: Sender;
 
@@ -92,7 +114,7 @@ async function runDueTasks(): Promise<void> {
         await sender(`Scheduled task running: "${task.prompt.slice(0, 80)}${task.prompt.length > 80 ? '...' : ''}"`);
 
         // Run as a fresh agent call (no session — scheduled tasks are autonomous)
-        const result = await runAgent(task.prompt, undefined, () => {}, undefined, undefined, abortController, undefined, agentMcpAllowlist);
+        const result = await runScheduledTask(task.prompt, abortController);
         clearTimeout(timeout);
 
         if (result.aborted) {
@@ -154,7 +176,7 @@ async function runDueMissionTasks(): Promise<void> {
     const timeout = setTimeout(() => abortController.abort(), TASK_TIMEOUT_MS);
 
     try {
-      const result = await runAgent(mission.prompt, undefined, () => {}, undefined, undefined, abortController, undefined, agentMcpAllowlist);
+      const result = await runScheduledTask(mission.prompt, abortController);
       clearTimeout(timeout);
 
       if (result.aborted) {

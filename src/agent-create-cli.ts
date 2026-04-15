@@ -9,6 +9,8 @@
  *     --name "Analytics" \
  *     --description "Data analysis and reporting" \
  *     --model claude-sonnet-4-6 \
+ *     --harness opencode \
+ *     --provider openai \
  *     --template research \
  *     --token "123456789:ABCdef..." \
  *     --activate
@@ -18,6 +20,8 @@
  *   --name        Display name (required)
  *   --description What this agent does (required)
  *   --model       Model override (default: claude-sonnet-4-6)
+ *   --harness     Agent harness: claude-code (default) or opencode
+ *   --provider    LLM provider for OpenCode: openai, anthropic, google, groq, etc.
  *   --template    Template to copy from (default: _template)
  *   --token       Telegram bot token from BotFather (required)
  *   --activate    Install launchd/systemd service and start immediately
@@ -37,7 +41,9 @@ Required:
   --token TOKEN        Telegram bot token from @BotFather
 
 Options:
-  --model MODEL        Claude model (default: claude-sonnet-4-6)
+  --model MODEL        Model (default: claude-sonnet-4-6 for claude-code)
+  --harness HARNESS    Agent harness: claude-code (default) or opencode
+  --provider PROVIDER   LLM provider for OpenCode: openai, anthropic, google, groq, etc.
   --template TEMPLATE  Template to clone from (default: _template)
   --activate           Install and start service after creation
   --validate           Only validate the token, then exit
@@ -133,6 +139,8 @@ async function main(): Promise<void> {
       name,
       description,
       model: (args.model as string) || undefined,
+      harness: (args.harness as 'claude-code' | 'opencode') || undefined,
+      provider: (args.provider as string) || undefined,
       template: (args.template as string) || undefined,
       botToken: token,
     });

@@ -4,6 +4,7 @@ import os from 'os';
 import { Api, Bot, Context, InputFile, RawApi } from 'grammy';
 
 import { runAgent, UsageInfo, AgentProgressEvent } from './agent.js';
+import { createHarness } from './harnesses/index.js';
 import {
   AGENT_ID,
   ALLOWED_CHAT_ID,
@@ -14,8 +15,11 @@ import {
   MAX_MESSAGE_LENGTH,
   activeBotToken,
   agentDefaultModel,
+  agentHarness,
+  agentProvider,
   agentMcpAllowlist,
   agentSystemPrompt,
+  PROJECT_ROOT,
   TYPING_REFRESH_MS,
   AGENT_TIMEOUT_MS,
   STREAM_STRATEGY,
@@ -114,6 +118,40 @@ const AVAILABLE_MODELS: Record<string, string> = {
   haiku: 'claude-haiku-4-5',
 };
 const DEFAULT_MODEL_LABEL = 'opus';
+
+async function runAgentWithHarness(
+  message: string,
+  sessionId: string | undefined,
+  onTyping: () => void,
+  onProgress?: (event: AgentProgressEvent) => void,
+  modelOverride?: string,
+  abortController?: AbortController,
+  onStreamText?: (text: string) => void,
+  mcpAllowlist?: string[],
+) {
+  const model = modelOverride ?? agentDefaultModel;
+  const effectiveModel = agentProvider && model
+    ? `${agentProvider}/${model}`
+    : model;
+
+  if (agentHarness === 'opencode') {
+    const harness = createHarness('opencode');
+    return harness.run({
+      message,
+      sessionId,
+      cwd: PROJECT_ROOT,
+      model: effectiveModel,
+      systemPrompt: agentSystemPrompt,
+      mcpAllowlist,
+      abortController,
+      onTyping,
+      onProgress,
+      onStreamText,
+    });
+  }
+
+  return runAgent(message, sessionId, onTyping, onProgress, model, abortController, onStreamText, mcpAllowlist);
+}
 
 export function setMainModelOverride(model: string): void {
   if (ALLOWED_CHAT_ID) chatModelOverride.set(ALLOWED_CHAT_ID, model);
@@ -531,12 +569,12 @@ async function handleMessage(ctx: Context, message: string, forceVoiceReply = fa
       }
     } : undefined;
 
-    const result = await runAgent(
+    const result = await runAgentWithHarness(
       fullMessage,
       sessionId,
       () => void sendTyping(ctx.api, chatId),
       onProgress,
-      chatModelOverride.get(chatIdStr) ?? agentDefaultModel,
+      chatModelOverride.get(chatIdStr) ?? undefined,
       abortCtrl,
       onStreamText,
       agentMcpAllowlist,
@@ -848,10 +886,10 @@ export function createBot(): Bot {
           const summaryAbort = new AbortController();
           const summaryTimer = setTimeout(() => summaryAbort.abort(), 60_000);
 
-          const result = await runAgent(
+          const result = await runAgentWithHarness(
             'Summarize what we accomplished this session in ONE short sentence (under 100 chars). No preamble, no quotes, just the summary. Example: "Drafted LinkedIn post about AI agents and scheduled Gmail triage task"',
             sessionToSummarize,
-            () => {},  // no typing indicator
+            () => {},
             undefined,
             undefined,
             summaryAbort,
@@ -1538,14 +1576,14 @@ async function processDashboardMessage(
       abortCtrl.abort();
     }, AGENT_TIMEOUT_MS);
 
-    const result = await runAgent(
+    const result = await runAgentWithHarness(
       fullMessage,
       sessionId,
-      () => {}, // no typing action for dashboard
+      () => {},
       onProgress,
-      agentDefaultModel,
+      undefined,
       abortCtrl,
-      undefined, // no streaming for dashboard
+      undefined,
       agentMcpAllowlist,
     );
 

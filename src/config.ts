@@ -33,6 +33,8 @@ export let activeBotToken =
   process.env.TELEGRAM_BOT_TOKEN || envConfig.TELEGRAM_BOT_TOKEN || '';
 export let agentCwd: string | undefined; // undefined = use PROJECT_ROOT
 export let agentDefaultModel: string | undefined; // from agent.yaml
+export let agentHarness: 'claude-code' | 'opencode' = 'claude-code'; // from agent.yaml
+export let agentProvider: string | undefined; // from agent.yaml (for OpenCode)
 export let agentObsidianConfig: { vault: string; folders: string[]; readOnly?: string[] } | undefined;
 export let agentSystemPrompt: string | undefined; // loaded from agents/{id}/CLAUDE.md
 export let agentMcpAllowlist: string[] | undefined; // from agent.yaml mcp_servers
@@ -42,6 +44,8 @@ export function setAgentOverrides(opts: {
   botToken: string;
   cwd: string;
   model?: string;
+  harness?: 'claude-code' | 'opencode';
+  provider?: string;
   obsidian?: { vault: string; folders: string[]; readOnly?: string[] };
   systemPrompt?: string;
   mcpServers?: string[];
@@ -50,6 +54,8 @@ export function setAgentOverrides(opts: {
   activeBotToken = opts.botToken;
   agentCwd = opts.cwd;
   agentDefaultModel = opts.model;
+  agentHarness = opts.harness ?? 'claude-code';
+  agentProvider = opts.provider;
   agentObsidianConfig = opts.obsidian;
   agentSystemPrompt = opts.systemPrompt;
   agentMcpAllowlist = opts.mcpServers;

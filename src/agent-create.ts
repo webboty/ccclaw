@@ -28,6 +28,8 @@ export interface CreateAgentOpts {
   name: string;
   description: string;
   model?: string;
+  harness?: 'claude-code' | 'opencode';
+  provider?: string;
   template?: string;
   botToken: string;
 }
@@ -140,7 +142,7 @@ export function listTemplates(): AgentTemplate[] {
 // ── Create ───────────────────────────────────────────────────────────
 
 export async function createAgent(opts: CreateAgentOpts): Promise<CreateAgentResult> {
-  const { id, name, description, model, template, botToken } = opts;
+  const { id, name, description, model, harness, provider, template, botToken } = opts;
 
   // Validate ID
   const idCheck = validateAgentId(id);
@@ -206,6 +208,8 @@ export async function createAgent(opts: CreateAgentOpts): Promise<CreateAgentRes
     telegram_bot_token_env: envKey,
     model: model || 'claude-sonnet-4-6',
   };
+  if (harness) agentYaml.harness = harness;
+  if (provider) agentYaml.provider = provider;
   fs.writeFileSync(
     path.join(agentDir, 'agent.yaml'),
     yaml.dump(agentYaml, { lineWidth: -1 }),

@@ -18,6 +18,14 @@ telegram_bot_token_env: MYAGENT_BOT_TOKEN
 # Users can override per-chat with /model in Telegram.
 model: claude-sonnet-4-6
 
+# Agent harness type: 'claude-code' (default) or 'opencode'
+# OpenCode supports 75+ providers via models.dev including local models.
+# harness: claude-code
+
+# Provider for the model (for OpenCode harness or multi-provider setups).
+# Examples: anthropic, openai, google, groq, ollama, models.dev
+# provider: anthropic
+
 # Obsidian integration (optional).
 # Assign folders from your vault so this agent auto-loads relevant context.
 # obsidian:

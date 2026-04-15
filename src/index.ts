@@ -39,6 +39,8 @@ if (AGENT_ID !== 'main') {
     botToken: agentConfig.botToken,
     cwd: agentDir,
     model: agentConfig.model,
+    harness: agentConfig.harness,
+    provider: agentConfig.provider,
     obsidian: agentConfig.obsidian,
     systemPrompt,
     mcpServers: agentConfig.mcpServers,

@@ -318,6 +318,7 @@ export function startDashboard(botApi?: Api<RawApi>): void {
       compactions,
       sessionAge,
       model: agentDefaultModel || 'sonnet-4-6',
+      harness: 'claude-code',
       telegramConnected: getTelegramConnected(),
       waConnected: WHATSAPP_ENABLED,
       slackConnected: !!SLACK_USER_TOKEN,
@@ -369,12 +370,14 @@ export function startDashboard(botApi?: Api<RawApi>): void {
           name: config.name,
           description: config.description,
           model: config.model ?? 'claude-opus-4-6',
+          harness: config.harness ?? 'claude-code',
+          provider: config.provider,
           running,
           todayTurns: stats.todayTurns,
           todayCost: stats.todayCost,
         };
       } catch {
-        return { id, name: id, description: '', model: 'unknown', running: false, todayTurns: 0, todayCost: 0 };
+        return { id, name: id, description: '', model: 'unknown', harness: 'claude-code' as const, running: false, todayTurns: 0, todayCost: 0 };
       }
     });
 
@@ -390,7 +393,7 @@ export function startDashboard(botApi?: Api<RawApi>): void {
     }
     const mainStats = getAgentTokenStats('main');
     const allAgents = [
-      { id: 'main', name: 'Main', description: 'Primary ClaudeClaw bot', model: 'claude-opus-4-6', running: mainRunning, todayTurns: mainStats.todayTurns, todayCost: mainStats.todayCost },
+      { id: 'main', name: 'Main', description: 'Primary ClaudeClaw bot', model: 'claude-opus-4-6', harness: 'claude-code' as const, running: mainRunning, todayTurns: mainStats.todayTurns, todayCost: mainStats.todayCost },
       ...agents,
     ];
 
@@ -423,24 +426,36 @@ export function startDashboard(botApi?: Api<RawApi>): void {
   // Update agent model
   app.patch('/api/agents/:id/model', async (c) => {
     const agentId = c.req.param('id');
-    const body = await c.req.json<{ model?: string }>();
+    const body = await c.req.json<{ model?: string; harness?: string; provider?: string }>();
     const model = body?.model?.trim();
-    if (!model) return c.json({ error: 'model required' }, 400);
+    const harness = body?.harness?.trim();
+    const provider = body?.provider?.trim();
 
-    const validModels = ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-sonnet-4-5', 'claude-haiku-4-5'];
-    if (!validModels.includes(model)) return c.json({ error: `Invalid model. Valid: ${validModels.join(', ')}` }, 400);
+    const validClaudeModels = ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-sonnet-4-5', 'claude-haiku-4-5'];
+    const validHarnesses = ['claude-code', 'opencode'];
+
+    if (harness && !validHarnesses.includes(harness)) {
+      return c.json({ error: `Invalid harness. Valid: ${validHarnesses.join(', ')}` }, 400);
+    }
+
+    if (model && harness !== 'opencode' && !validClaudeModels.includes(model)) {
+      return c.json({ error: `Invalid Claude model. Valid: ${validClaudeModels.join(', ')}` }, 400);
+    }
 
     try {
       if (agentId === 'main') {
-        // Main agent uses in-memory override (same as /model command)
         const { setMainModelOverride } = await import('./bot.js');
-        setMainModelOverride(model);
+        if (model) setMainModelOverride(model);
       } else {
-        setAgentModel(agentId, model);
+        if (model) setAgentModel(agentId, model);
+        if (harness || provider) {
+          const { setAgentHarness } = await import('./agent-config.js');
+          setAgentHarness(agentId, harness as 'claude-code' | 'opencode' | undefined, provider || undefined);
+        }
       }
-      return c.json({ ok: true, agent: agentId, model });
+      return c.json({ ok: true, agent: agentId, model, harness, provider });
     } catch (err) {
-      return c.json({ error: 'Failed to update model' }, 500);
+      return c.json({ error: 'Failed to update agent config' }, 500);
     }
   });
 
@@ -492,6 +507,8 @@ export function startDashboard(botApi?: Api<RawApi>): void {
       name?: string;
       description?: string;
       model?: string;
+      harness?: string;
+      provider?: string;
       template?: string;
       botToken?: string;
     }>();
@@ -500,11 +517,17 @@ export function startDashboard(botApi?: Api<RawApi>): void {
     const name = body?.name?.trim();
     const description = body?.description?.trim();
     const botToken = body?.botToken?.trim();
+    const harness = body?.harness?.trim() as 'claude-code' | 'opencode' | undefined;
+    const provider = body?.provider?.trim();
 
     if (!id) return c.json({ error: 'id required' }, 400);
     if (!name) return c.json({ error: 'name required' }, 400);
     if (!description) return c.json({ error: 'description required' }, 400);
     if (!botToken) return c.json({ error: 'botToken required' }, 400);
+
+    if (harness && !['claude-code', 'opencode'].includes(harness)) {
+      return c.json({ error: 'Invalid harness. Valid: claude-code, opencode' }, 400);
+    }
 
     try {
       const result = await createAgent({
@@ -512,6 +535,8 @@ export function startDashboard(botApi?: Api<RawApi>): void {
         name,
         description,
         model: body?.model?.trim() || undefined,
+        harness,
+        provider,
         template: body?.template?.trim() || undefined,
         botToken,
       });

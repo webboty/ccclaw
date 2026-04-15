@@ -5,12 +5,16 @@ import yaml from 'js-yaml';
 import { CLAUDECLAW_CONFIG, PROJECT_ROOT } from './config.js';
 import { readEnvFile } from './env.js';
 
+export type HarnessType = 'claude-code' | 'opencode';
+
 export interface AgentConfig {
   name: string;
   description: string;
   botTokenEnv: string;
   botToken: string;
   model?: string;
+  harness?: HarnessType;
+  provider?: string;
   mcpServers?: string[];
   obsidian?: {
     vault: string;
@@ -61,6 +65,8 @@ export function loadAgentConfig(agentId: string): AgentConfig {
   const description = (raw['description'] as string) ?? '';
   const botTokenEnv = raw['telegram_bot_token_env'] as string;
   const model = raw['model'] as string | undefined;
+  const harness = (raw['harness'] as HarnessType) ?? 'claude-code';
+  const provider = raw['provider'] as string | undefined;
 
   if (!name || !botTokenEnv) {
     throw new Error(`Agent config ${configPath} must have 'name' and 'telegram_bot_token_env'`);
@@ -90,7 +96,7 @@ export function loadAgentConfig(agentId: string): AgentConfig {
 
   const mcpServers = raw['mcp_servers'] as string[] | undefined;
 
-  return { name, description, botTokenEnv, botToken, model, mcpServers, obsidian };
+  return { name, description, botTokenEnv, botToken, model, harness, provider, mcpServers, obsidian };
 }
 
 /** Update the model field in an agent's agent.yaml file. */
@@ -101,6 +107,22 @@ export function setAgentModel(agentId: string, model: string): void {
 
   const raw = yaml.load(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
   raw['model'] = model;
+  fs.writeFileSync(configPath, yaml.dump(raw, { lineWidth: -1 }), 'utf-8');
+}
+
+/** Update harness and/or provider fields in an agent's agent.yaml file. */
+export function setAgentHarness(
+  agentId: string,
+  harness?: HarnessType,
+  provider?: string,
+): void {
+  const agentDir = resolveAgentDir(agentId);
+  const configPath = path.join(agentDir, 'agent.yaml');
+  if (!fs.existsSync(configPath)) throw new Error(`Agent config not found: ${configPath}`);
+
+  const raw = yaml.load(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+  if (harness !== undefined) raw['harness'] = harness;
+  if (provider !== undefined) raw['provider'] = provider || undefined;
   fs.writeFileSync(configPath, yaml.dump(raw, { lineWidth: -1 }), 'utf-8');
 }
 
@@ -147,6 +169,8 @@ export function listAllAgents(): Array<{
   name: string;
   description: string;
   model?: string;
+  harness?: HarnessType;
+  provider?: string;
 }> {
   const ids = listAgentIds();
   const result: Array<{
@@ -154,6 +178,8 @@ export function listAllAgents(): Array<{
     name: string;
     description: string;
     model?: string;
+    harness?: HarnessType;
+    provider?: string;
   }> = [];
 
   for (const id of ids) {
@@ -164,6 +190,8 @@ export function listAllAgents(): Array<{
         name: config.name,
         description: config.description,
         model: config.model,
+        harness: config.harness,
+        provider: config.provider,
       });
     } catch {
       // Skip agents with broken config
