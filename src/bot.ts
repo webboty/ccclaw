@@ -134,6 +134,8 @@ async function runAgentWithHarness(
     ? `${agentProvider}/${model}`
     : model;
 
+  logger.info({ harness: agentHarness, model: effectiveModel }, 'Running agent with harness');
+
   if (agentHarness === 'opencode') {
     const harness = createHarness('opencode');
     return harness.run({
@@ -569,16 +571,22 @@ async function handleMessage(ctx: Context, message: string, forceVoiceReply = fa
       }
     } : undefined;
 
-    const result = await runAgentWithHarness(
-      fullMessage,
-      sessionId,
-      () => void sendTyping(ctx.api, chatId),
-      onProgress,
-      chatModelOverride.get(chatIdStr) ?? undefined,
-      abortCtrl,
-      onStreamText,
-      agentMcpAllowlist,
-    );
+    let result;
+    try {
+      result = await runAgentWithHarness(
+        fullMessage,
+        sessionId,
+        () => void sendTyping(ctx.api, chatId),
+        onProgress,
+        chatModelOverride.get(chatIdStr) ?? undefined,
+        abortCtrl,
+        onStreamText,
+        agentMcpAllowlist,
+      );
+    } catch (err) {
+      logger.error({ err }, 'Agent query failed');
+      result = { text: `Error: ${err instanceof Error ? err.message : String(err)}`, newSessionId: sessionId, usage: null };
+    }
 
     clearTimeout(timeoutId);
     setActiveAbort(chatIdStr, null);

@@ -1,4 +1,6 @@
 import type { UsageInfo } from '../agent.js';
+import { ClaudeCodeHarness } from './claude-code.js';
+import { OpenCodeHarness } from './opencode.js';
 
 export interface AgentProgressEvent {
   type: 'task_started' | 'task_completed' | 'tool_active';
@@ -34,16 +36,15 @@ export interface AgentHarness {
   supportsMultiProvider?: boolean;
 }
 
+export { ClaudeCodeHarness, OpenCodeHarness };
+
 export function createHarness(type: HarnessType): AgentHarness {
   switch (type) {
     case 'claude-code':
-      return new (require('./claude-code.js').ClaudeCodeHarness)();
+      return new ClaudeCodeHarness();
     case 'opencode':
-      return new (require('./opencode.js').OpenCodeHarness)();
+      return new OpenCodeHarness();
     default:
       throw new Error(`Unknown harness type: ${type}`);
   }
 }
-
-export { ClaudeCodeHarness } from './claude-code.js';
-export { OpenCodeHarness } from './opencode.js';

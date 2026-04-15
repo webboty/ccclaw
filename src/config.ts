@@ -24,6 +24,9 @@ const envConfig = readEnvFile([
   'SECURITY_PIN_HASH',
   'IDLE_LOCK_MINUTES',
   'EMERGENCY_KILL_PHRASE',
+  'MAIN_HARNESS',
+  'MAIN_PROVIDER',
+  'MAIN_MODEL',
 ]);
 
 // ── Multi-agent support ──────────────────────────────────────────────
@@ -34,7 +37,20 @@ export let activeBotToken =
 export let agentCwd: string | undefined; // undefined = use PROJECT_ROOT
 export let agentDefaultModel: string | undefined; // from agent.yaml
 export let agentHarness: 'claude-code' | 'opencode' = 'claude-code'; // from agent.yaml
+
+// Debug helper
+export function getAgentHarness(): string {
+  return agentHarness;
+}
 export let agentProvider: string | undefined; // from agent.yaml (for OpenCode)
+
+// Main agent harness config (can be overridden via .env)
+export const MAIN_HARNESS: 'claude-code' | 'opencode' | undefined =
+  (process.env.MAIN_HARNESS as 'claude-code' | 'opencode') || envConfig.MAIN_HARNESS || undefined;
+export const MAIN_PROVIDER: string | undefined =
+  process.env.MAIN_PROVIDER || envConfig.MAIN_PROVIDER || undefined;
+export const MAIN_MODEL: string | undefined =
+  process.env.MAIN_MODEL || envConfig.MAIN_MODEL || undefined;
 export let agentObsidianConfig: { vault: string; folders: string[]; readOnly?: string[] } | undefined;
 export let agentSystemPrompt: string | undefined; // loaded from agents/{id}/CLAUDE.md
 export let agentMcpAllowlist: string[] | undefined; // from agent.yaml mcp_servers

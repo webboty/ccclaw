@@ -1,10 +1,19 @@
 import fs from 'fs';
 import path from 'path';
+import { readEnvFile } from './env.js';
+
+// Global error handler to prevent crashes
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
+});
 
 import { loadAgentConfig, resolveAgentDir, resolveAgentClaudeMd } from './agent-config.js';
 import { createBot } from './bot.js';
 import { checkPendingMigrations } from './migrations.js';
-import { ALLOWED_CHAT_ID, activeBotToken, STORE_DIR, PROJECT_ROOT, CLAUDECLAW_CONFIG, GOOGLE_API_KEY, setAgentOverrides, SECURITY_PIN_HASH, IDLE_LOCK_MINUTES, EMERGENCY_KILL_PHRASE } from './config.js';
+import { ALLOWED_CHAT_ID, activeBotToken, STORE_DIR, PROJECT_ROOT, CLAUDECLAW_CONFIG, GOOGLE_API_KEY, setAgentOverrides, SECURITY_PIN_HASH, IDLE_LOCK_MINUTES, EMERGENCY_KILL_PHRASE, MAIN_HARNESS, MAIN_PROVIDER, MAIN_MODEL } from './config.js';
 import { startDashboard } from './dashboard.js';
 import { initDatabase, cleanupOldMissionTasks, insertAuditLog } from './db.js';
 import { initSecurity, setAuditCallback } from './security.js';
@@ -58,13 +67,18 @@ if (AGENT_ID !== 'main') {
       systemPrompt = fs.readFileSync(externalClaudeMd, 'utf-8');
     } catch { /* unreadable */ }
     if (systemPrompt) {
+      logger.info({ process_env_MAIN: process.env.MAIN_HARNESS, envConfig_MAIN: readEnvFile(['MAIN_HARNESS']).MAIN_HARNESS, MAIN_HARNESS }, 'Debug: env values');
+      logger.info({ MAIN_HARNESS, MAIN_PROVIDER, MAIN_MODEL }, 'Main agent config from .env');
       setAgentOverrides({
         agentId: 'main',
         botToken: activeBotToken,
         cwd: PROJECT_ROOT,
         systemPrompt,
+        harness: MAIN_HARNESS,
+        provider: MAIN_PROVIDER,
+        model: MAIN_MODEL,
       });
-      logger.info({ source: externalClaudeMd }, 'Loaded CLAUDE.md from CLAUDECLAW_CONFIG');
+      logger.info({ harness: MAIN_HARNESS, provider: MAIN_PROVIDER, model: MAIN_MODEL, source: externalClaudeMd }, 'Loaded CLAUDE.md from CLAUDECLAW_CONFIG with harness');
     }
   } else if (!fs.existsSync(path.join(PROJECT_ROOT, 'CLAUDE.md'))) {
     logger.warn(

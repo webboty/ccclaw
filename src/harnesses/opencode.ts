@@ -19,7 +19,7 @@ export class OpenCodeHarness implements AgentHarness {
   readonly supportsMultiProvider = true;
 
   async run(options: AgentOptions): Promise<AgentResult> {
-    let opencode: Awaited<ReturnType<typeof createOpencode>> | null = null;
+    let client: Awaited<ReturnType<typeof createOpencodeClient>> | null = null;
     let sessionId: string | undefined;
     let streamedText = '';
 
@@ -29,10 +29,10 @@ export class OpenCodeHarness implements AgentHarness {
     );
 
     try {
-      opencode = await createOpencode({
-        hostname: OPENCODE_HOST,
-        port: OPENCODE_PORT,
-        timeout: 5000,
+      // Connect to existing OpenCode server
+      logger.info({ host: OPENCODE_HOST, port: OPENCODE_PORT }, 'Connecting to OpenCode server');
+      client = await createOpencodeClient({
+        baseUrl: `http://${OPENCODE_HOST}:${OPENCODE_PORT}`,
       });
 
       const directory = options.cwd || PROJECT_ROOT;
@@ -40,7 +40,7 @@ export class OpenCodeHarness implements AgentHarness {
       if (options.sessionId) {
         sessionId = options.sessionId;
       } else {
-        const sessionResp = await opencode.client.session.create({
+        const sessionResp = await client.session.create({
           body: { title: `ccclaw-${Date.now()}` },
           query: { directory },
         });
@@ -51,7 +51,7 @@ export class OpenCodeHarness implements AgentHarness {
         sessionId = sessionResp.data!.id;
 
         if (options.systemPrompt) {
-          await opencode.client.session.prompt({
+          await client.session.prompt({
             path: { id: sessionId },
             body: {
               noReply: true,
@@ -66,7 +66,7 @@ export class OpenCodeHarness implements AgentHarness {
         const sid = sessionId;
         options.abortController.signal.addEventListener('abort', async () => {
           try {
-            await opencode!.client.session.abort({ path: { id: sid } });
+            await client!.session.abort({ path: { id: sid } });
           } catch (err) {
             logger.warn({ err }, 'Failed to abort OpenCode session');
           }
@@ -75,7 +75,7 @@ export class OpenCodeHarness implements AgentHarness {
 
       const typingInterval = options.onTyping ? setInterval(options.onTyping, 4000) : null;
 
-      const eventSource = await opencode.client.event.subscribe({ query: { directory } });
+      const eventSource = await client.event.subscribe({ query: { directory } });
 
       const streamProcessing = (async () => {
         try {
@@ -105,7 +105,7 @@ export class OpenCodeHarness implements AgentHarness {
 
       const parsedModel = options.model ? this.parseModel(options.model) : undefined;
 
-      const promptResult = await opencode.client.session.prompt({
+      const promptResult = await client.session.prompt({
         path: { id: sessionId },
         body: {
           ...(parsedModel ? { model: parsedModel } : {}),
@@ -133,15 +133,19 @@ export class OpenCodeHarness implements AgentHarness {
 
       return { text: resultText, newSessionId: sessionId, usage };
     } catch (err) {
+      const error = err as Error & { code?: string };
+      if (error.code === 'EPIPE' || (err instanceof Error && err.message?.includes('EPIPE'))) {
+        logger.error({ err }, 'OpenCode server spawn failed (EPIPE). Make sure OpenCode is installed and working.');
+        return { text: 'OpenCode failed to start. Please ensure opencode CLI is installed: npm install -g opencode', newSessionId: undefined, usage: null };
+      }
       if (options.abortController?.signal.aborted) {
         logger.info('OpenCode query aborted by user');
         return { text: null, newSessionId: sessionId, usage: null, aborted: true };
       }
-      throw err;
+      logger.error({ err }, 'OpenCode query failed');
+      return { text: `Error: ${err instanceof Error ? err.message : String(err)}`, newSessionId: sessionId, usage: null };
     } finally {
-      if (opencode) {
-        opencode.server.close();
-      }
+      // Client connection stays open for reuse
     }
   }
 
