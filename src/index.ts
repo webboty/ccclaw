@@ -86,7 +86,7 @@ function showBanner(): void {
   }
 }
 
-function acquireLock(): void {
+async function acquireLock(): Promise<void> {
   fs.mkdirSync(STORE_DIR, { recursive: true });
   try {
     if (fs.existsSync(PID_FILE)) {
@@ -94,7 +94,9 @@ function acquireLock(): void {
       if (!isNaN(old) && old !== process.pid) {
         try {
           process.kill(old, 'SIGTERM');
-          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+          // Give the old process time to release the port. Atomics.wait is
+          // forbidden on the main thread, so use a real async sleep instead.
+          await new Promise<void>(resolve => setTimeout(resolve, 1500));
         } catch { /* already dead */ }
       }
     }
@@ -123,7 +125,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  acquireLock();
+  await acquireLock();
 
   initDatabase();
   logger.info('Database ready');

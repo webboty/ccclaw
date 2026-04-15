@@ -5,6 +5,7 @@ import { serve } from '@hono/node-server';
 
 import fs from 'fs';
 import path from 'path';
+import { execFile } from 'child_process';
 import { AGENT_ID, ALLOWED_CHAT_ID, DASHBOARD_PORT, DASHBOARD_TOKEN, PROJECT_ROOT, STORE_DIR, WHATSAPP_ENABLED, SLACK_USER_TOKEN, CONTEXT_LIMIT, agentDefaultModel } from './config.js';
 import crypto from 'crypto';
 import {
@@ -481,6 +482,24 @@ export function startDashboard(botApi?: Api<RawApi>): void {
   // List available agent templates
   app.get('/api/agents/templates', (c) => {
     return c.json({ templates: listTemplates() });
+  });
+
+  // List available OpenCode models by running `opencode models`
+  app.get('/api/opencode/models', (c) => {
+    return new Promise<Response>((resolve) => {
+      execFile('opencode', ['models'], { timeout: 10000 }, (err, stdout) => {
+        if (err) {
+          resolve(c.json({ error: 'opencode binary not found or failed', models: [] }, 500) as unknown as Response);
+          return;
+        }
+        // Every valid model ID is in "provider/model" format; skip plugin/status lines
+        const models = stdout
+          .split('\n')
+          .map(l => l.trim())
+          .filter(l => l.includes('/') && !l.startsWith('🔌'));
+        resolve(c.json({ models }));
+      });
+    });
   });
 
   // Validate an agent ID (before creation)

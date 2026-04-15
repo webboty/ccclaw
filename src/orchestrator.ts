@@ -189,7 +189,7 @@ export async function delegateToAgent(
 
     try {
       const harnessType: HarnessType = agentConfig.harness ?? 'claude-code';
-      const harness = await createHarness(harnessType);
+      const harness = createHarness(harnessType);
       const cwd = path.join(PROJECT_ROOT, 'agents', agentId);
 
       const result = await harness.run({

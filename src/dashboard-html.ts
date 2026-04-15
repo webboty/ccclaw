@@ -314,26 +314,32 @@ export function getDashboardHtml(token: string, chatId: string): string {
       </div>
 
       <div id="caw-model-section">
-        <div class="flex gap-2 mb-3">
-          <div id="caw-model-select-wrapper" style="flex:1">
-            <label class="text-xs text-gray-400 block mb-1">Model</label>
-            <select id="caw-model" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#e0e0e0;font-size:12px;outline:none">
-              <option value="claude-sonnet-4-6" selected>Sonnet 4.6</option>
-              <option value="claude-opus-4-6">Opus 4.6</option>
-              <option value="claude-haiku-4-5">Haiku 4.5</option>
-            </select>
+        <!-- Claude Code: dropdown of known Claude models -->
+        <div id="caw-model-select-wrapper" class="mb-3">
+          <label class="text-xs text-gray-400 block mb-1">Model</label>
+          <select id="caw-model" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#e0e0e0;font-size:12px;outline:none">
+            <option value="claude-sonnet-4-6" selected>Sonnet 4.6</option>
+            <option value="claude-opus-4-6">Opus 4.6</option>
+            <option value="claude-haiku-4-5">Haiku 4.5</option>
+          </select>
+        </div>
+        <!-- OpenCode: free-text provider/model input backed by live model list -->
+        <div id="caw-oc-model-wrapper" class="mb-3" style="display:none">
+          <label class="text-xs text-gray-400 block mb-1">
+            Model
+            <span style="color:#6b7280;font-weight:normal"> — provider/model format, e.g. <code style="color:#9ca3af">openai/gpt-4o</code></span>
+          </label>
+          <datalist id="caw-oc-models-list"></datalist>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="text" id="caw-oc-model" list="caw-oc-models-list"
+              placeholder="Leave blank to use OpenCode default from opencode.json"
+              style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:8px 12px;color:#e0e0e0;font-size:12px;outline:none;font-family:monospace">
+            <button type="button" id="caw-oc-load-btn" onclick="cawLoadOcModels()"
+              style="flex:0 0 auto;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:7px 12px;color:#9ca3af;font-size:11px;cursor:pointer;white-space:nowrap">
+              Load models
+            </button>
           </div>
-          <div id="caw-provider-select-wrapper" style="flex:1;display:none">
-            <label class="text-xs text-gray-400 block mb-1">Provider</label>
-            <select id="caw-provider" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#e0e0e0;font-size:12px;outline:none">
-              <option value="openai">OpenAI</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="google">Google Gemini</option>
-              <option value="groq">Groq (free)</option>
-              <option value="ollama">Ollama (local)</option>
-              <option value="models.dev">Models.dev (75+)</option>
-            </select>
-          </div>
+          <div id="caw-oc-model-hint" class="text-xs mt-1" style="color:#4b5563"></div>
         </div>
       </div>
 
@@ -1217,7 +1223,12 @@ function openCreateAgentWizard() {
   document.getElementById('caw-id').value = '';
   document.getElementById('caw-name').value = '';
   document.getElementById('caw-desc').value = '';
-  document.getElementById('caw-model').value = 'claude-sonnet-4-6';
+  (document.getElementById('caw-model') as HTMLSelectElement).value = 'claude-sonnet-4-6';
+  (document.getElementById('caw-oc-model') as HTMLInputElement).value = '';
+  document.getElementById('caw-oc-model-hint').textContent = '';
+  document.getElementById('caw-oc-models-list').innerHTML = '';
+  document.getElementById('caw-harness').value = 'claude-code';
+  cawHarnessChanged();
   document.getElementById('caw-token').value = '';
   document.getElementById('caw-id-status').innerHTML = '';
   document.getElementById('caw-token-status').innerHTML = '';
@@ -1305,63 +1316,39 @@ function cawGoStep1() { cawShowStep(1); }
 function cawHarnessChanged() {
   var harness = document.getElementById('caw-harness').value;
   var modelSelectWrapper = document.getElementById('caw-model-select-wrapper');
-  var providerSelectWrapper = document.getElementById('caw-provider-select-wrapper');
-  var modelSelect = document.getElementById('caw-model');
+  var ocModelWrapper = document.getElementById('caw-oc-model-wrapper');
 
   if (harness === 'opencode') {
     modelSelectWrapper.style.display = 'none';
-    providerSelectWrapper.style.display = '';
-    // Set default OpenCode model based on provider
-    updateOpenCodeModelOptions();
+    ocModelWrapper.style.display = '';
   } else {
     modelSelectWrapper.style.display = '';
-    providerSelectWrapper.style.display = 'none';
-    // Reset to Claude models
-    modelSelect.innerHTML = '<option value="claude-sonnet-4-6" selected>Sonnet 4.6</option>' +
-      '<option value="claude-opus-4-6">Opus 4.6</option>' +
-      '<option value="claude-haiku-4-5">Haiku 4.5</option>';
+    ocModelWrapper.style.display = 'none';
   }
 }
 
-function updateOpenCodeModelOptions() {
-  var provider = document.getElementById('caw-provider').value;
-  var modelSelect = document.getElementById('caw-model');
-  var models = {
-    'openai': [
-      { value: 'gpt-4o', label: 'GPT-4o' },
-      { value: 'gpt-4o-mini', label: 'GPT-4o mini' },
-      { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-    ],
-    'anthropic': [
-      { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
-      { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
-      { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
-    ],
-    'google': [
-      { value: 'gemini-2-5-flash', label: 'Gemini 2.5 Flash' },
-      { value: 'gemini-2-5-pro', label: 'Gemini 2.5 Pro' },
-      { value: 'gemini-1-5-pro', label: 'Gemini 1.5 Pro' },
-    ],
-    'groq': [
-      { value: 'llama-3-3-70b-versatile', label: 'Llama 3.3 70B' },
-      { value: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
-      { value: 'gemma2-9b-it', label: 'Gemma 2 9B' },
-    ],
-    'ollama': [
-      { value: 'llama3.2', label: 'Llama 3.2' },
-      { value: 'llama3.1', label: 'Llama 3.1' },
-      { value: 'codellama', label: 'Code Llama' },
-    ],
-    'models.dev': [
-      { value: 'anthropic/claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
-      { value: 'openai/gpt-4o', label: 'GPT-4o' },
-      { value: 'google/gemini-2-5-flash', label: 'Gemini 2.5 Flash' },
-    ],
-  };
-  var options = models[provider] || models['openai'];
-  modelSelect.innerHTML = options.map(function(m) {
-    return '<option value="' + m.value + '">' + m.label + '</option>';
-  }).join('');
+async function cawLoadOcModels() {
+  var btn = document.getElementById('caw-oc-load-btn');
+  var hint = document.getElementById('caw-oc-model-hint');
+  var list = document.getElementById('caw-oc-models-list');
+  btn.textContent = 'Loading...';
+  btn.style.pointerEvents = 'none';
+  hint.textContent = '';
+  try {
+    var res = await fetch(BASE + '/api/opencode/models?token=' + TOKEN);
+    var data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Failed');
+    list.innerHTML = data.models.map(function(m) {
+      return '<option value="' + escapeHtml(m) + '">';
+    }).join('');
+    hint.style.color = '#6ee7b7';
+    hint.textContent = data.models.length + ' models loaded — start typing to filter';
+  } catch(e) {
+    hint.style.color = '#f87171';
+    hint.textContent = 'Could not load models — is opencode installed and on PATH?';
+  }
+  btn.textContent = 'Load models';
+  btn.style.pointerEvents = 'auto';
 }
 
 function cawGoStep2() {
@@ -1452,12 +1439,22 @@ async function cawCreate() {
   errEl.style.display = 'none';
 
   var harness = document.getElementById('caw-harness').value;
-  var model = harness === 'opencode'
-    ? document.getElementById('caw-model').value
-    : document.getElementById('caw-model').value;
-  var provider = harness === 'opencode'
-    ? document.getElementById('caw-provider').value
-    : undefined;
+  var model, provider;
+  if (harness === 'opencode') {
+    var ocRaw = (document.getElementById('caw-oc-model') as HTMLInputElement).value.trim();
+    // Split "provider/model" into separate fields; blank means use OpenCode default
+    if (ocRaw && ocRaw.includes('/')) {
+      var slash = ocRaw.indexOf('/');
+      provider = ocRaw.slice(0, slash);
+      model = ocRaw.slice(slash + 1);
+    } else {
+      model = ocRaw || undefined;
+      provider = undefined;
+    }
+  } else {
+    model = (document.getElementById('caw-model') as HTMLSelectElement).value;
+    provider = undefined;
+  }
 
   try {
     var res = await fetch(BASE + '/api/agents/create?token=' + TOKEN, {

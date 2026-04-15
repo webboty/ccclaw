@@ -966,11 +966,22 @@ export function createBot(): Bot {
     }
   });
 
-  // /model — switch Claude model (opus, sonnet, haiku)
+  // /model — switch model (Claude Code: opus/sonnet/haiku; OpenCode: use dashboard)
   bot.command('model', async (ctx) => {
     if (await replyIfLocked(ctx)) return;
     const chatIdStr = ctx.chat!.id.toString();
     const arg = ctx.match?.trim().toLowerCase();
+
+    // OpenCode agents: model is provider-specific, switching is done via dashboard
+    if (agentHarness === 'opencode') {
+      const currentModel = agentDefaultModel ?? 'not set';
+      const provider = agentProvider ?? 'unknown';
+      await ctx.reply(
+        `This agent uses the OpenCode harness (provider: ${provider}, model: ${currentModel}).\n\n` +
+        `Model switching for OpenCode agents is done via the dashboard — open it with /dashboard and edit the agent settings.`,
+      );
+      return;
+    }
 
     if (!arg) {
       const current = chatModelOverride.get(chatIdStr);

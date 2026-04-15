@@ -665,6 +665,69 @@ async function main() {
     if (key) env.ANTHROPIC_API_KEY = key;
   }
 
+  // ── 12. OpenCode (alternative agent harness) ─────────────────────────────
+  section('Agent harness — Claude Code vs OpenCode');
+
+  info('By default, agents run on Claude Code (Anthropic models only).');
+  info('OpenCode is an alternative harness that unlocks 75+ providers:');
+  console.log();
+  bullet('OpenAI  — GPT-4o, GPT-4o mini, GPT-4 Turbo');
+  bullet('Google  — Gemini 2.5 Flash / Pro, Gemini 1.5 Pro');
+  bullet('Groq    — Llama 3.3 70B, Mixtral 8x7B (free tier available)');
+  bullet('Ollama  — local models (Llama 3.2, Code Llama, etc.)');
+  bullet('...and any provider on models.dev');
+  console.log();
+  info('OpenCode requires the opencode binary on your PATH:');
+  console.log(`  ${c.cyan}npm install -g opencode-ai${c.reset}`);
+  console.log();
+  info('Each agent individually chooses its harness in agent.yaml:');
+  console.log(`  ${c.gray}harness: opencode${c.reset}`);
+  console.log(`  ${c.gray}provider: openai${c.reset}`);
+  console.log(`  ${c.gray}model: gpt-4o${c.reset}`);
+  console.log();
+  info('Or create an OpenCode agent after setup with:');
+  console.log(`  ${c.cyan}npm run agent:create -- --harness opencode --provider openai --model gpt-4o${c.reset}`);
+  console.log();
+
+  const opencodeInstalled = (() => {
+    try { execSync('opencode --version', { stdio: 'pipe' }); return true; } catch { return false; }
+  })();
+  if (opencodeInstalled) {
+    ok('opencode binary found — OpenCode harness ready to use');
+  } else {
+    info('opencode binary not found. Install it to use alternative providers.');
+    const installOC = await confirm('Install opencode now (npm install -g opencode-ai)?', false);
+    if (installOC) {
+      const s = spinner('Installing opencode...');
+      const r = spawnSync('npm', ['install', '-g', 'opencode-ai'], { stdio: 'pipe' });
+      r.status === 0 ? s.stop('ok', 'opencode installed') : s.stop('warn', 'Install failed — run manually: npm install -g opencode-ai');
+    }
+  }
+
+  // Collect API keys for the providers the user wants
+  const wantOpenCode = await confirm('Configure API keys for non-Anthropic providers now?', false);
+  if (wantOpenCode) {
+    console.log();
+    if (!env.OPENAI_API_KEY) {
+      const key = await ask('OpenAI API key (Enter to skip)');
+      if (key) env.OPENAI_API_KEY = key;
+    } else {
+      ok('OpenAI API key already set');
+    }
+    if (!env.GOOGLE_GENERATIVE_AI_API_KEY && !env.GOOGLE_API_KEY) {
+      const key = await ask('Google AI API key for Gemini (Enter to skip)');
+      if (key) env.GOOGLE_GENERATIVE_AI_API_KEY = key;
+    } else {
+      ok('Google AI API key already set');
+    }
+    if (!env.GROQ_API_KEY) {
+      const key = await ask('Groq API key — free tier available at console.groq.com (Enter to skip)');
+      if (key) env.GROQ_API_KEY = key;
+    } else {
+      ok('Groq API key already set');
+    }
+  }
+
   // ── Write .env ────────────────────────────────────────────────────────
   console.log();
   const sw = spinner('Saving .env...');
@@ -683,6 +746,12 @@ async function main() {
     '',
     '# ── Claude auth (optional — uses claude login by default) ─────',
     `ANTHROPIC_API_KEY=${env.ANTHROPIC_API_KEY || ''}`,
+    '',
+    '# ── OpenCode — alternative agent harness (75+ providers) ─────',
+    env.OPENAI_API_KEY ? `OPENAI_API_KEY=${env.OPENAI_API_KEY}` : '# OPENAI_API_KEY=',
+    env.GOOGLE_GENERATIVE_AI_API_KEY ? `GOOGLE_GENERATIVE_AI_API_KEY=${env.GOOGLE_GENERATIVE_AI_API_KEY}` : '# GOOGLE_GENERATIVE_AI_API_KEY=',
+    '# OPENCODE_PORT=4096',
+    '# OPENCODE_HOST=127.0.0.1',
     '',
     '# ── Voice ─────────────────────────────────────────────────────',
     `GROQ_API_KEY=${env.GROQ_API_KEY || ''}`,
@@ -708,7 +777,7 @@ async function main() {
   ];
 
   // Preserve unknown keys
-  const known = new Set(['TELEGRAM_BOT_TOKEN','ALLOWED_CHAT_ID','CLAUDECLAW_CONFIG','ANTHROPIC_API_KEY','GROQ_API_KEY','ELEVENLABS_API_KEY','ELEVENLABS_VOICE_ID','GOOGLE_API_KEY','CLAUDE_CODE_OAUTH_TOKEN','WHATSAPP_ENABLED','DB_ENCRYPTION_KEY','DASHBOARD_TOKEN','DASHBOARD_PORT','DASHBOARD_URL','SECURITY_PIN_HASH','IDLE_LOCK_MINUTES','EMERGENCY_KILL_PHRASE','DESTRUCTIVE_CONFIRM']);
+  const known = new Set(['TELEGRAM_BOT_TOKEN','ALLOWED_CHAT_ID','CLAUDECLAW_CONFIG','ANTHROPIC_API_KEY','GROQ_API_KEY','ELEVENLABS_API_KEY','ELEVENLABS_VOICE_ID','GOOGLE_API_KEY','GOOGLE_GENERATIVE_AI_API_KEY','OPENAI_API_KEY','CLAUDE_CODE_OAUTH_TOKEN','WHATSAPP_ENABLED','DB_ENCRYPTION_KEY','DASHBOARD_TOKEN','DASHBOARD_PORT','DASHBOARD_URL','SECURITY_PIN_HASH','IDLE_LOCK_MINUTES','EMERGENCY_KILL_PHRASE','DESTRUCTIVE_CONFIRM','OPENCODE_PORT','OPENCODE_HOST']);
   for (const [k, v] of Object.entries(env)) {
     if (!known.has(k) && v) lines.push(`${k}=${v}`);
   }

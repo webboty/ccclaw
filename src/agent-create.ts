@@ -206,7 +206,10 @@ export async function createAgent(opts: CreateAgentOpts): Promise<CreateAgentRes
     name,
     description,
     telegram_bot_token_env: envKey,
-    model: model || 'claude-sonnet-4-6',
+    // For OpenCode agents, omit model when not specified — OpenCode falls back
+    // to the "model" key in the user's opencode.json config.
+    // For Claude Code agents, default to sonnet.
+    ...(model ? { model } : harness !== 'opencode' ? { model: 'claude-sonnet-4-6' } : {}),
   };
   if (harness) agentYaml.harness = harness;
   if (provider) agentYaml.provider = provider;
