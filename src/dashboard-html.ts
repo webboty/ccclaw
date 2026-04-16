@@ -956,7 +956,10 @@ async function loadInfo() {
     const el = document.getElementById('bot-info');
     const parts = [];
     if (d.botName) parts.push('<span class="font-semibold text-white">' + d.botName + '</span>');
-    el.innerHTML = parts.join(' <span class="text-gray-700">|</span> ');
+    if (parts.length > 0) {
+      el.innerHTML = parts.join(' <span class="text-gray-700">|</span> ');
+      el.style.display = '';
+    }
   } catch {}
 }
 
@@ -991,8 +994,8 @@ async function loadAgents() {
     const container = document.getElementById('agents-container');
     // Always show agents section so "+ New Agent" button is accessible
     section.style.display = '';
-    if (!data.agents || data.agents.length <= 1) {
-      container.innerHTML = '<div class="text-xs text-gray-600 py-2">No agents yet. Click + New Agent to create one.</div>';
+    if (!data.agents || data.agents.length === 0) {
+      container.innerHTML = '<div class="text-xs text-gray-600 py-2">No agents configured.</div>';
       return;
     }
     container.innerHTML = data.agents.map(a => {
@@ -1008,12 +1011,15 @@ async function loadAgents() {
       const modelShort = function(m) { return {'claude-opus-4-6':'Opus','claude-sonnet-4-6':'Sonnet','claude-sonnet-4-5':'Sonnet 4.5','claude-haiku-4-5':'Haiku'}[m] || m; };
       const currentModel = a.model || (a.id === 'main' ? 'claude-opus-4-6' : 'claude-sonnet-4-6');
       const modelLabel = modelShort(currentModel);
-      const modelSelect = '<div class="model-picker" data-agent="' + a.id + '" onclick="event.stopPropagation();toggleModelPicker(this)">' +
-        '<span class="model-current">' + modelLabel + (providerLabel ? ' ' + providerLabel : '') + ' <span style="font-size:8px;opacity:0.5">&#9662;</span></span>' +
-        '<div class="model-menu" style="display:none">' +
-          modelOpts.map(m => '<div class="model-opt' + (currentModel === m ? ' model-active' : '') + '" data-model="' + m + '" onclick="pickModel(this)">' + modelShort(m) + '</div>').join('') +
-        '</div>' +
-      '</div>';
+      // OpenCode agents: show current model as text only (no picker — OC manages its own models)
+      const modelSelect = harness === 'opencode'
+        ? '<div class="text-xs mt-1" style="color:#8b5cf6">' + escapeHtml(currentModel) + (providerLabel ? ' (' + providerLabel + ')' : '') + '</div>'
+        : '<div class="model-picker" data-agent="' + a.id + '" onclick="event.stopPropagation();toggleModelPicker(this)">' +
+            '<span class="model-current">' + modelLabel + (providerLabel ? ' ' + providerLabel : '') + ' <span style="font-size:8px;opacity:0.5">&#9662;</span></span>' +
+            '<div class="model-menu" style="display:none">' +
+              modelOpts.map(m => '<div class="model-opt' + (currentModel === m ? ' model-active' : '') + '" data-model="' + m + '" onclick="pickModel(this)">' + modelShort(m) + '</div>').join('') +
+            '</div>' +
+          '</div>';
       return '<div class="card clickable-card" style="min-width:130px;flex:1;max-width:220px;border-left:3px solid ' + color + '" data-agent="' + a.id + '" onclick="toggleAgentDetail(this.dataset.agent)">' +
         '<div class="font-bold text-white text-sm">' + a.name + harnessBadge + '</div>' +
         '<div class="text-xs mt-1">' + dot + ' ' + statusText + '</div>' +
@@ -1613,21 +1619,21 @@ function toggleSectionBlur(section) {
 }
 
 async function loadSummary() {
-  try {
-    const [tokens, agents, mems] = await Promise.all([
-      api('/api/tokens?chatId=' + CHAT_ID),
-      api('/api/agents'),
-      api('/api/memories?chatId=' + CHAT_ID),
-    ]);
-    const bar = document.getElementById('summary-bar');
-    bar.style.display = '';
-    document.getElementById('sum-messages').textContent = tokens.stats.todayTurns || '0';
-    const activeCount = agents.agents ? agents.agents.filter(a => a.running).length : 0;
-    document.getElementById('sum-agents').textContent = activeCount + '/' + (agents.agents ? agents.agents.length : 0);
-    var totalTokens = (tokens.stats.todayInput || 0) + (tokens.stats.todayOutput || 0);
-    document.getElementById('sum-cost').textContent = totalTokens > 1000 ? Math.round(totalTokens / 1000) + 'k' : totalTokens.toString();
-    document.getElementById('sum-memories').textContent = mems.stats.total || '0';
-  } catch {}
+  // Fetch each source independently so a failure in one doesn't hide the whole bar
+  const [tokens, agents, mems] = await Promise.all([
+    api('/api/tokens?chatId=' + CHAT_ID).catch(() => null),
+    api('/api/agents').catch(() => null),
+    api('/api/memories?chatId=' + CHAT_ID).catch(() => null),
+  ]);
+  const bar = document.getElementById('summary-bar');
+  bar.style.display = '';
+  document.getElementById('sum-messages').textContent = (tokens?.stats?.todayTurns || 0).toString();
+  const activeCount = agents?.agents ? agents.agents.filter(a => a.running).length : 0;
+  const totalAgents = agents?.agents ? agents.agents.length : 0;
+  document.getElementById('sum-agents').textContent = activeCount + '/' + totalAgents;
+  var totalTokens = (tokens?.stats?.todayInput || 0) + (tokens?.stats?.todayOutput || 0);
+  document.getElementById('sum-cost').textContent = totalTokens > 1000 ? Math.round(totalTokens / 1000) + 'k' : totalTokens.toString();
+  document.getElementById('sum-memories').textContent = (mems?.stats?.total || 0).toString();
 }
 
 // ── Mission Control ──────────────────────────────────────────────────
@@ -1987,10 +1993,10 @@ function closeTaskHistory() {
 setInterval(loadMissionControl, 15000);
 
 async function refreshAll() {
-  const btn = document.getElementById('refresh-btn').querySelector('svg');
-  btn.classList.add('refresh-spin');
+  const btn = document.getElementById('refresh-btn')?.querySelector('svg');
+  btn?.classList.add('refresh-spin');
   await Promise.all([loadInfo(), loadTasks(), loadMemories(), loadHealth(), loadTokens(), loadAgents(), loadHiveMind(), loadSummary(), loadMissionControl()]);
-  btn.classList.remove('refresh-spin');
+  btn?.classList.remove('refresh-spin');
   document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
 }
 

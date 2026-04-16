@@ -6,7 +6,7 @@ import { serve } from '@hono/node-server';
 import fs from 'fs';
 import path from 'path';
 import { execFile } from 'child_process';
-import { AGENT_ID, ALLOWED_CHAT_ID, DASHBOARD_PORT, DASHBOARD_TOKEN, PROJECT_ROOT, STORE_DIR, WHATSAPP_ENABLED, SLACK_USER_TOKEN, CONTEXT_LIMIT, agentDefaultModel } from './config.js';
+import { AGENT_ID, ALLOWED_CHAT_ID, DASHBOARD_PORT, DASHBOARD_TOKEN, PROJECT_ROOT, STORE_DIR, WHATSAPP_ENABLED, SLACK_USER_TOKEN, CONTEXT_LIMIT, agentDefaultModel, agentHarness } from './config.js';
 import crypto from 'crypto';
 import {
   getAllScheduledTasks,
@@ -394,7 +394,7 @@ export function startDashboard(botApi?: Api<RawApi>): void {
     }
     const mainStats = getAgentTokenStats('main');
     const allAgents = [
-      { id: 'main', name: 'Main', description: 'Primary ClaudeClaw bot', model: 'claude-opus-4-6', harness: 'claude-code' as const, running: mainRunning, todayTurns: mainStats.todayTurns, todayCost: mainStats.todayCost },
+      { id: 'main', name: 'Main', description: 'Primary ClaudeClaw bot', model: agentDefaultModel ?? 'claude-opus-4-6', harness: agentHarness, running: mainRunning, todayTurns: mainStats.todayTurns, todayCost: mainStats.todayCost },
       ...agents,
     ];
 
