@@ -132,8 +132,8 @@ export function startDashboard(botApi?: Api<RawApi>): void {
 
   // Serve dashboard HTML
   app.get('/', (c) => {
-    const chatId = c.req.query('chatId') || '';
-    return c.html(getDashboardHtml(DASHBOARD_TOKEN, chatId));
+    const chatIdQuery = c.req.query('chatId') || ALLOWED_CHAT_ID || '';
+    return c.html(getDashboardHtml(DASHBOARD_TOKEN, chatIdQuery));
   });
 
   // Scheduled tasks
@@ -333,7 +333,7 @@ export function startDashboard(botApi?: Api<RawApi>): void {
 
   // Token / cost stats
   app.get('/api/tokens', (c) => {
-    const chatId = c.req.query('chatId') || '';
+    const chatId = c.req.query('chatId') || ALLOWED_CHAT_ID || '';
     const stats = getDashboardTokenStats(chatId);
     const costTimeline = getDashboardCostTimeline(chatId, 30);
     const recentUsage = getDashboardRecentTokenUsage(chatId, 20);

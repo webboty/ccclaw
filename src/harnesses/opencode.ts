@@ -209,6 +209,11 @@ export class OpenCodeHarness implements AgentHarness {
       if (promptResult.data) {
         resultText = this.extractText(promptResult.data.parts);
         usage = this.extractUsage(promptResult.data.info);
+        if (usage && usage.inputTokens > 0) {
+          logger.info({ usage: usage }, 'OpenCode usage extracted');
+        } else {
+          logger.warn({ info: promptResult.data.info }, 'No usage in promptResult.data.info');
+        }
       } else {
         logger.warn({ promptResult: JSON.stringify(promptResult) }, 'No promptResult.data');
       }
