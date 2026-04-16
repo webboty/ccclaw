@@ -38,10 +38,6 @@ export let agentCwd: string | undefined; // undefined = use PROJECT_ROOT
 export let agentDefaultModel: string | undefined; // from agent.yaml
 export let agentHarness: 'claude-code' | 'opencode' = 'claude-code'; // from agent.yaml
 
-// Debug helper
-export function getAgentHarness(): string {
-  return agentHarness;
-}
 export let agentProvider: string | undefined; // from agent.yaml (for OpenCode)
 
 // Main agent harness config (can be overridden via .env)

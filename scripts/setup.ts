@@ -680,6 +680,10 @@ async function main() {
   info('OpenCode requires the opencode binary on your PATH:');
   console.log(`  ${c.cyan}npm install -g opencode-ai${c.reset}`);
   console.log();
+  info('Important: the OpenCode server must be running before using an OpenCode agent.');
+  info('Start it once, leave it running alongside ccclaw:');
+  console.log(`  ${c.cyan}opencode serve${c.reset}   ${c.gray}# defaults to 127.0.0.1:4096${c.reset}`);
+  console.log();
   info('Each agent individually chooses its harness in agent.yaml:');
   console.log(`  ${c.gray}harness: opencode${c.reset}`);
   console.log(`  ${c.gray}provider: openai${c.reset}`);

@@ -134,9 +134,14 @@ export class OpenCodeHarness implements AgentHarness {
       return { text: resultText, newSessionId: sessionId, usage };
     } catch (err) {
       const error = err as Error & { code?: string };
-      if (error.code === 'EPIPE' || (err instanceof Error && err.message?.includes('EPIPE'))) {
-        logger.error({ err }, 'OpenCode server spawn failed (EPIPE). Make sure OpenCode is installed and working.');
-        return { text: 'OpenCode failed to start. Please ensure opencode CLI is installed: npm install -g opencode', newSessionId: undefined, usage: null };
+      const msg = err instanceof Error ? err.message : String(err);
+      if (error.code === 'ECONNREFUSED' || error.code === 'EPIPE' || msg.includes('EPIPE') || msg.includes('ECONNREFUSED')) {
+        logger.error({ err, host: OPENCODE_HOST, port: OPENCODE_PORT }, 'Cannot reach OpenCode server');
+        return {
+          text: `Cannot connect to OpenCode server at ${OPENCODE_HOST}:${OPENCODE_PORT}.\n\nStart it first:\n  opencode serve --hostname ${OPENCODE_HOST} --port ${OPENCODE_PORT}`,
+          newSessionId: undefined,
+          usage: null,
+        };
       }
       if (options.abortController?.signal.aborted) {
         logger.info('OpenCode query aborted by user');

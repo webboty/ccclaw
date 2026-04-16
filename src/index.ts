@@ -1,7 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { readEnvFile } from './env.js';
-
 // Global error handler to prevent crashes
 process.on('uncaughtException', (err) => {
   console.error('Uncaught exception:', err);
@@ -67,8 +65,6 @@ if (AGENT_ID !== 'main') {
       systemPrompt = fs.readFileSync(externalClaudeMd, 'utf-8');
     } catch { /* unreadable */ }
     if (systemPrompt) {
-      logger.info({ process_env_MAIN: process.env.MAIN_HARNESS, envConfig_MAIN: readEnvFile(['MAIN_HARNESS']).MAIN_HARNESS, MAIN_HARNESS }, 'Debug: env values');
-      logger.info({ MAIN_HARNESS, MAIN_PROVIDER, MAIN_MODEL }, 'Main agent config from .env');
       setAgentOverrides({
         agentId: 'main',
         botToken: activeBotToken,
