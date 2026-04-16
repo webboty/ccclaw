@@ -118,6 +118,11 @@ export function startDashboard(botApi?: Api<RawApi>): void {
 
   // Token auth middleware
   app.use('*', async (c, next) => {
+    const path = c.req.path;
+    // Skip auth for favicon
+    if (path === '/favicon.ico') {
+      return c.body(null, 204);
+    }
     const token = c.req.query('token');
     if (!DASHBOARD_TOKEN || !token || token !== DASHBOARD_TOKEN) {
       return c.json({ error: 'Unauthorized' }, 401);

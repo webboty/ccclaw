@@ -721,7 +721,7 @@ function api(path) {
   return fetch(BASE + path + sep + 'token=' + TOKEN).then(r => r.json());
 }
 
-let salienceChart, memTimelineChart, costChart;
+let salienceChart, memTimelineChart, costChart, cacheChart;
 
 function cronToHuman(cron) {
   const parts = cron.split(' ');
