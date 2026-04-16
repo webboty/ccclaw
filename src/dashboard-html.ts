@@ -1229,8 +1229,8 @@ function openCreateAgentWizard() {
   document.getElementById('caw-id').value = '';
   document.getElementById('caw-name').value = '';
   document.getElementById('caw-desc').value = '';
-  (document.getElementById('caw-model') as HTMLSelectElement).value = 'claude-sonnet-4-6';
-  (document.getElementById('caw-oc-model') as HTMLInputElement).value = '';
+  document.getElementById('caw-model').value = 'claude-sonnet-4-6';
+  document.getElementById('caw-oc-model').value = '';
   document.getElementById('caw-oc-model-hint').textContent = '';
   document.getElementById('caw-oc-models-list').innerHTML = '';
   document.getElementById('caw-harness').value = 'claude-code';
@@ -1447,7 +1447,7 @@ async function cawCreate() {
   var harness = document.getElementById('caw-harness').value;
   var model, provider;
   if (harness === 'opencode') {
-    var ocRaw = (document.getElementById('caw-oc-model') as HTMLInputElement).value.trim();
+    var ocRaw = document.getElementById('caw-oc-model').value.trim();
     // Split "provider/model" into separate fields; blank means use OpenCode default
     if (ocRaw && ocRaw.includes('/')) {
       var slash = ocRaw.indexOf('/');
@@ -1458,7 +1458,7 @@ async function cawCreate() {
       provider = undefined;
     }
   } else {
-    model = (document.getElementById('caw-model') as HTMLSelectElement).value;
+    model = document.getElementById('caw-model').value;
     provider = undefined;
   }
 

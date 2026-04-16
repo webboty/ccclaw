@@ -209,10 +209,12 @@ export class OpenCodeHarness implements AgentHarness {
       if (promptResult.data) {
         resultText = this.extractText(promptResult.data.parts);
         usage = this.extractUsage(promptResult.data.info);
+      } else {
+        logger.warn({ promptResult: JSON.stringify(promptResult) }, 'No promptResult.data');
       }
 
       logger.info(
-        { inputTokens: usage?.inputTokens ?? 0, costUsd: usage?.totalCostUsd ?? 0 },
+        { inputTokens: usage?.inputTokens ?? 0, costUsd: usage?.totalCostUsd ?? 0, resultText: resultText?.slice(0, 100) },
         'OpenCode turn usage',
       );
 
