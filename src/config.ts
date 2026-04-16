@@ -27,6 +27,8 @@ const envConfig = readEnvFile([
   'MAIN_HARNESS',
   'MAIN_PROVIDER',
   'MAIN_MODEL',
+  'OPENCODE_SERVER_PORT',
+  'OPENCODE_HOST',
 ]);
 
 // ── Multi-agent support ──────────────────────────────────────────────
@@ -47,6 +49,14 @@ export const MAIN_PROVIDER: string | undefined =
   process.env.MAIN_PROVIDER || envConfig.MAIN_PROVIDER || undefined;
 export const MAIN_MODEL: string | undefined =
   process.env.MAIN_MODEL || envConfig.MAIN_MODEL || undefined;
+
+// OpenCode server — ccclaw manages its own server on a dedicated port
+// so it never conflicts with the user's own opencode TUI (default: 4096)
+export const OPENCODE_SERVER_PORT: number =
+  parseInt(process.env.OPENCODE_SERVER_PORT || envConfig.OPENCODE_SERVER_PORT || '4097', 10);
+export const OPENCODE_HOST: string =
+  process.env.OPENCODE_HOST || envConfig.OPENCODE_HOST || '127.0.0.1';
+
 export let agentObsidianConfig: { vault: string; folders: string[]; readOnly?: string[] } | undefined;
 export let agentSystemPrompt: string | undefined; // loaded from agents/{id}/CLAUDE.md
 export let agentMcpAllowlist: string[] | undefined; // from agent.yaml mcp_servers

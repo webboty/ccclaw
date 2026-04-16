@@ -680,9 +680,10 @@ async function main() {
   info('OpenCode requires the opencode binary on your PATH:');
   console.log(`  ${c.cyan}npm install -g opencode-ai${c.reset}`);
   console.log();
-  info('Important: the OpenCode server must be running before using an OpenCode agent.');
-  info('Start it once, leave it running alongside ccclaw:');
-  console.log(`  ${c.cyan}opencode serve${c.reset}   ${c.gray}# defaults to 127.0.0.1:4096${c.reset}`);
+  info('ccclaw manages its own OpenCode server automatically — you don\'t need');
+  info('to start it manually. On first use it spawns on a dedicated port (4097)');
+  info('so it never conflicts with your own opencode TUI session (port 4096).');
+  info('Override the port via OPENCODE_SERVER_PORT in .env if needed.');
   console.log();
   info('Each agent individually chooses its harness in agent.yaml:');
   console.log(`  ${c.gray}harness: opencode${c.reset}`);
@@ -754,7 +755,7 @@ async function main() {
     '# ── OpenCode — alternative agent harness (75+ providers) ─────',
     env.OPENAI_API_KEY ? `OPENAI_API_KEY=${env.OPENAI_API_KEY}` : '# OPENAI_API_KEY=',
     env.GOOGLE_GENERATIVE_AI_API_KEY ? `GOOGLE_GENERATIVE_AI_API_KEY=${env.GOOGLE_GENERATIVE_AI_API_KEY}` : '# GOOGLE_GENERATIVE_AI_API_KEY=',
-    '# OPENCODE_PORT=4096',
+    '# OPENCODE_SERVER_PORT=4097   # dedicated port — change if 4097 is taken',
     '# OPENCODE_HOST=127.0.0.1',
     '',
     '# ── Voice ─────────────────────────────────────────────────────',
@@ -781,7 +782,7 @@ async function main() {
   ];
 
   // Preserve unknown keys
-  const known = new Set(['TELEGRAM_BOT_TOKEN','ALLOWED_CHAT_ID','CLAUDECLAW_CONFIG','ANTHROPIC_API_KEY','GROQ_API_KEY','ELEVENLABS_API_KEY','ELEVENLABS_VOICE_ID','GOOGLE_API_KEY','GOOGLE_GENERATIVE_AI_API_KEY','OPENAI_API_KEY','CLAUDE_CODE_OAUTH_TOKEN','WHATSAPP_ENABLED','DB_ENCRYPTION_KEY','DASHBOARD_TOKEN','DASHBOARD_PORT','DASHBOARD_URL','SECURITY_PIN_HASH','IDLE_LOCK_MINUTES','EMERGENCY_KILL_PHRASE','DESTRUCTIVE_CONFIRM','OPENCODE_PORT','OPENCODE_HOST']);
+  const known = new Set(['TELEGRAM_BOT_TOKEN','ALLOWED_CHAT_ID','CLAUDECLAW_CONFIG','ANTHROPIC_API_KEY','GROQ_API_KEY','ELEVENLABS_API_KEY','ELEVENLABS_VOICE_ID','GOOGLE_API_KEY','GOOGLE_GENERATIVE_AI_API_KEY','OPENAI_API_KEY','CLAUDE_CODE_OAUTH_TOKEN','WHATSAPP_ENABLED','DB_ENCRYPTION_KEY','DASHBOARD_TOKEN','DASHBOARD_PORT','DASHBOARD_URL','SECURITY_PIN_HASH','IDLE_LOCK_MINUTES','EMERGENCY_KILL_PHRASE','DESTRUCTIVE_CONFIRM','OPENCODE_SERVER_PORT','OPENCODE_HOST']);
   for (const [k, v] of Object.entries(env)) {
     if (!known.has(k) && v) lines.push(`${k}=${v}`);
   }

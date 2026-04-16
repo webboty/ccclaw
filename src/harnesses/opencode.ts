@@ -1,12 +1,91 @@
-import { createOpencode, createOpencodeClient } from '@opencode-ai/sdk';
+import { createOpencodeServer, createOpencodeClient } from '@opencode-ai/sdk';
 
-import { PROJECT_ROOT } from '../config.js';
+import { PROJECT_ROOT, OPENCODE_SERVER_PORT, OPENCODE_HOST } from '../config.js';
 import { logger } from '../logger.js';
 import type { AgentHarness, AgentOptions, AgentResult } from './index.js';
 import type { UsageInfo } from '../agent.js';
 
-const OPENCODE_PORT = parseInt(process.env.OPENCODE_PORT ?? '4096', 10);
-const OPENCODE_HOST = process.env.OPENCODE_HOST ?? '127.0.0.1';
+// ── Singleton server + client ─────────────────────────────────────────────────
+// One OpenCode server per ccclaw process, on a dedicated port (default 4097)
+// so it never conflicts with the user's own opencode TUI (which uses 4096).
+// The server is spawned lazily on first use and reused for every subsequent query.
+
+type OcClient = Awaited<ReturnType<typeof createOpencodeClient>>;
+type OcServer = { url: string; close(): void };
+
+let _client: OcClient | null = null;
+let _ownedServer: OcServer | null = null;
+let _connecting: Promise<OcClient> | null = null;
+let _cleanupRegistered = false;
+
+function registerCleanup(): void {
+  if (_cleanupRegistered) return;
+  _cleanupRegistered = true;
+  const cleanup = () => {
+    if (_ownedServer) {
+      try { _ownedServer.close(); } catch { /* ignore */ }
+      _ownedServer = null;
+    }
+  };
+  process.on('exit', cleanup);
+  process.on('SIGTERM', () => { cleanup(); });
+  process.on('SIGINT',  () => { cleanup(); });
+}
+
+async function getClient(): Promise<OcClient> {
+  if (_client) return _client;
+
+  // Deduplicate concurrent first calls (e.g. two messages arriving simultaneously)
+  if (_connecting) return _connecting;
+
+  _connecting = (async (): Promise<OcClient> => {
+    const baseUrl = `http://${OPENCODE_HOST}:${OPENCODE_SERVER_PORT}`;
+
+    // 1. Try connecting to an already-running server on the dedicated port
+    //    (user may have pre-started `opencode serve --port 4097`)
+    try {
+      const candidate = createOpencodeClient({ baseUrl });
+      await (candidate as unknown as { config: { get(): Promise<unknown> } }).config.get();
+      logger.info({ port: OPENCODE_SERVER_PORT }, 'Connected to existing OpenCode server');
+      _client = candidate;
+      registerCleanup();
+      return _client;
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'ECONNREFUSED') throw err; // unexpected — surface it
+    }
+
+    // 2. Nothing listening — spawn our own server on the dedicated port
+    logger.info({ host: OPENCODE_HOST, port: OPENCODE_SERVER_PORT }, 'Spawning OpenCode server');
+    _ownedServer = await createOpencodeServer({
+      hostname: OPENCODE_HOST,
+      port: OPENCODE_SERVER_PORT,
+      timeout: 15000, // first startup can be slow on some systems
+    });
+    logger.info({ url: _ownedServer.url }, 'OpenCode server ready');
+    _client = createOpencodeClient({ baseUrl: _ownedServer.url });
+    registerCleanup();
+    return _client;
+  })();
+
+  try {
+    const result = await _connecting;
+    _connecting = null;
+    return result;
+  } catch (err) {
+    _connecting = null;
+    throw err;
+  }
+}
+
+// Reset the singleton (called when the server dies mid-session)
+function resetClient(): void {
+  _client = null;
+  // Don't close _ownedServer here — it may already be dead
+  _ownedServer = null;
+}
+
+// ── Harness ───────────────────────────────────────────────────────────────────
 
 interface ParsedModel {
   providerID: string;
@@ -19,7 +98,6 @@ export class OpenCodeHarness implements AgentHarness {
   readonly supportsMultiProvider = true;
 
   async run(options: AgentOptions): Promise<AgentResult> {
-    let client: Awaited<ReturnType<typeof createOpencodeClient>> | null = null;
     let sessionId: string | undefined;
     let streamedText = '';
 
@@ -28,13 +106,20 @@ export class OpenCodeHarness implements AgentHarness {
       'Starting OpenCode query',
     );
 
+    let client: OcClient;
     try {
-      // Connect to existing OpenCode server
-      logger.info({ host: OPENCODE_HOST, port: OPENCODE_PORT }, 'Connecting to OpenCode server');
-      client = await createOpencodeClient({
-        baseUrl: `http://${OPENCODE_HOST}:${OPENCODE_PORT}`,
-      });
+      client = await getClient();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error({ err, host: OPENCODE_HOST, port: OPENCODE_SERVER_PORT }, 'Failed to start/connect OpenCode server');
+      return {
+        text: `Could not start OpenCode server on port ${OPENCODE_SERVER_PORT}.\n\nMake sure the opencode binary is installed:\n  npm install -g opencode-ai\n\nError: ${msg}`,
+        newSessionId: undefined,
+        usage: null,
+      };
+    }
 
+    try {
       const directory = options.cwd || PROJECT_ROOT;
 
       if (options.sessionId) {
@@ -66,7 +151,7 @@ export class OpenCodeHarness implements AgentHarness {
         const sid = sessionId;
         options.abortController.signal.addEventListener('abort', async () => {
           try {
-            await client!.session.abort({ path: { id: sid } });
+            await client.session.abort({ path: { id: sid } });
           } catch (err) {
             logger.warn({ err }, 'Failed to abort OpenCode session');
           }
@@ -132,37 +217,42 @@ export class OpenCodeHarness implements AgentHarness {
       );
 
       return { text: resultText, newSessionId: sessionId, usage };
+
     } catch (err) {
-      const error = err as Error & { code?: string };
-      const msg = err instanceof Error ? err.message : String(err);
-      if (error.code === 'ECONNREFUSED' || error.code === 'EPIPE' || msg.includes('EPIPE') || msg.includes('ECONNREFUSED')) {
-        logger.error({ err, host: OPENCODE_HOST, port: OPENCODE_PORT }, 'Cannot reach OpenCode server');
-        return {
-          text: `Cannot connect to OpenCode server at ${OPENCODE_HOST}:${OPENCODE_PORT}.\n\nStart it first:\n  opencode serve --hostname ${OPENCODE_HOST} --port ${OPENCODE_PORT}`,
-          newSessionId: undefined,
-          usage: null,
-        };
-      }
       if (options.abortController?.signal.aborted) {
         logger.info('OpenCode query aborted by user');
         return { text: null, newSessionId: sessionId, usage: null, aborted: true };
       }
+
+      const error = err as NodeJS.ErrnoException;
+      const msg = err instanceof Error ? err.message : String(err);
+
+      // Server died mid-session — reset so next call triggers a respawn
+      if (error.code === 'ECONNREFUSED' || error.code === 'EPIPE' ||
+          msg.includes('ECONNREFUSED') || msg.includes('EPIPE')) {
+        logger.error({ err }, 'OpenCode server connection lost — will respawn on next query');
+        resetClient();
+        return {
+          text: 'OpenCode server connection lost. The server will restart automatically on your next message.',
+          newSessionId: undefined,
+          usage: null,
+        };
+      }
+
       logger.error({ err }, 'OpenCode query failed');
-      return { text: `Error: ${err instanceof Error ? err.message : String(err)}`, newSessionId: sessionId, usage: null };
-    } finally {
-      // Client connection stays open for reuse
+      return { text: `Error: ${msg}`, newSessionId: sessionId, usage: null };
     }
   }
 
   private parseModel(model: string): ParsedModel {
     if (model.includes('/')) {
-      const [providerID, modelID] = model.split('/');
-      return { providerID, modelID };
+      const slash = model.indexOf('/');
+      return { providerID: model.slice(0, slash), modelID: model.slice(slash + 1) };
     }
     const lower = model.toLowerCase();
     if (lower.includes('claude')) return { providerID: 'anthropic', modelID: model };
-    if (lower.includes('gpt')) return { providerID: 'openai', modelID: model };
-    if (lower.includes('gemini')) return { providerID: 'google', modelID: model };
+    if (lower.includes('gpt'))    return { providerID: 'openai',    modelID: model };
+    if (lower.includes('gemini')) return { providerID: 'google',    modelID: model };
     if (lower.includes('llama') || lower.includes('mixtral') || lower.includes('gemma')) {
       return { providerID: 'groq', modelID: model };
     }
@@ -176,7 +266,7 @@ export class OpenCodeHarness implements AgentHarness {
   }
 
   private extractUsage(info: {
-    tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } };
+    tokens?: { input?: number; output?: number; cache?: { read?: number } };
     cost?: number;
   } | undefined): UsageInfo | null {
     if (!info?.tokens) return null;
@@ -190,11 +280,5 @@ export class OpenCodeHarness implements AgentHarness {
       lastCallCacheRead: 0,
       lastCallInputTokens: info.tokens.input ?? 0,
     };
-  }
-
-  async connectToExistingServer(): Promise<ReturnType<typeof createOpencodeClient>> {
-    return createOpencodeClient({
-      baseUrl: `http://${OPENCODE_HOST}:${OPENCODE_PORT}`,
-    });
   }
 }
